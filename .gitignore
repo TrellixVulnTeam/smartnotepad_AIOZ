@@ -1,0 +1,5 @@
+#node modules#
+node_modules
+
+#service account key file#
+smartnotepad-*.json

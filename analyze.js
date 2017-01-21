@@ -7,37 +7,31 @@ var Storage = require('@google-cloud/storage');
 const projectId = 'smartnotepad-156308';
 const text = 'Google, headquartered in Mountain View, unveiled the new Android phone at the Consumer Electronic Show.  Sundar Pichai said in his keynote that users love their new Android phones.';
 
-function run(projectId, text) {
-  // Instantiates a client
-  const languageClient = Language({
-    projectId: projectId
-  });
-
-  languageClient.detectSyntax(text)
-    .then
-  
-}
+analyzeSyntaxOfText(text);
 
 // [START language_syntax_string]
 function analyzeSyntaxOfText (text) {
   // Instantiates a client
-  const language = Language();
+  const languageClient = Language({
+      projectId: projectId,
+      keyFilename: 'smartnotepad-a4b570c72ce1.json'
+  });
 
   // Instantiates a Document, representing the provided text
-  const document = language.document({
+  const document = languageClient.document({
     // The document text, e.g. "Hello, world!"
     content: text
   });
 
   // Detects syntax in the document
-  return document.detectSyntax()
+  languageClient.detectSyntax(text)
     .then((results) => {
       const syntax = results[0];
-
+      //console.log(results);
       console.log('Tags:');
       syntax.forEach((part) => console.log(part.tag));
 
-      return syntax;
+      //return syntax;
     });
 }
 // [END language_syntax_string]
