@@ -2,12 +2,13 @@
 
 var Language = require('@google-cloud/language');
 var Storage = require('@google-cloud/storage');
+var fs = require('fs');
 
 // Your Google Cloud Platform project ID
 const projectId = 'smartnotepad-156308';
-const text = 'davis is writing code.';
+const text = 'President Hindenburg made Hitler Chancellor.';
 
-parse(text);
+
 
 function dependentTokens(node, tokenArray){
     var dependentTokens = {};
@@ -38,16 +39,16 @@ function removeTokens(tokenArray, entity){
     var tempTokens = tokenArray;
     var string = "";
     var toRemove = [];
-
+    var flag = 0;
     for (var tokens = tempTokens.length -1; tokens >= 0; tokens--){
         string = tempTokens[tokens].text.content;
 
         if(entity.name.includes(string)){
-
-            var temp = dependentTokens(tempTokens[tokens], tokenArray);
             if(tempTokens[tokens].dependencyEdge.label == "ROOT"){
                 continue;
             }
+            var temp = dependentTokens(tempTokens[tokens], tokenArray);
+            //onsole.log(temp);
             for (var key in temp){
                 if (!temp[key].length == 0) {
                     for (var t in temp[key]) {
@@ -78,15 +79,17 @@ function removeTokens(tokenArray, entity){
 function aux(retString, removed, flag){
     for(var item = removed.length-1; item >= 0; item--){
         if(removed[item].dependencyEdge.label == "AUX"){
+            //console.log(removed[item]);
             retString += (removed[item].text.content + " ");
             //console.log(removed);
             remove(removed[item], removed);
             flag = 1;
         }
     }
-    if (flag == 0) {
-        retString += "did ";
-    }
+    // if (flag == 0) {
+    //
+    //     retString += "did ";
+    // }
     if(flag == 2){
         for(var item = removed.length-1; item >= 0; item--){
             if(removed[item].dependencyEdge.label == "ROOT"){
@@ -101,14 +104,14 @@ function aux(retString, removed, flag){
         if(removed[item].dependencyEdge.label == "ROOT" && flag == 0){
             newLemma = removed[item].lemma;
             // removed.splice(item, 1);
-            retString += (newLemma + " ");
+            retString += (removed[item].text.content + " ");
         }
         else
         {
             retString += (removed[item].text.content + " ");
         }
     }
-    retString = retString.slice(0, -4);
+    retString = retString.slice(0, -2);
     retString += "?";
     return retString;
 }
@@ -135,6 +138,7 @@ function inversion(entity, removed, original){
 
     if(entity.type == "PERSON"){
         retString += "Who ";
+        //console.log(removed);
         retString = aux(retString, removed, flag);
 
     }
@@ -159,7 +163,7 @@ function inversion(entity, removed, original){
             }
         }
         if (flag == 0) {
-            retString += "Where ";
+            retString += "Which location ";
             retString = aux(retString, removed, flag);
         }
         // retString += "Where ";
@@ -190,13 +194,15 @@ function inversion(entity, removed, original){
         retString += "What ";
         retString = aux(retString, removed, flag);
     }
-    console.log(retString);
+
     answer[retString] = entity;
+    return answer;
     //console.log(answer);
 }
 
-function parse(text){
+var parse = function(text, callback){
     var promises = [];
+    var questions = [];
     const syntax = analyzeSyntaxOfText(text);
     const entities = analyzeEntitiesOfText(text);
     promises.push(syntax);
@@ -211,11 +217,12 @@ function parse(text){
              var tempEntity = ArrayOfEntities[entity];
              var tempToken = tokens.slice(0);
              var removed = removeTokens(tempToken, tempEntity);
-             inversion(tempEntity, removed, tokens);
+             questions.push(inversion(tempEntity, removed, tokens));
         }
+        callback(questions);
 
     });
-}
+};
 
 
 
@@ -287,4 +294,18 @@ function analyzeSyntaxInFile (bucketName, fileName) {
       return syntax;
     });
 }
+
+fs.readFileSync('input.txt').toString().split('\n').forEach(function (line) {
+    parse(line, function(results){
+        console.log("Input: "+ line);
+        for(var key in results[0]){
+            console.log("Questions: " + key);
+            console.log("Answer: " +results[0][key].name);
+        }
+    });
+});
+
+// parse(text, function(results){
+//     console.log(results);
+// });
 // [END language_syntax_file]
