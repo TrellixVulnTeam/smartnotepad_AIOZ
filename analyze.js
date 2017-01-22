@@ -5,7 +5,7 @@ var Storage = require('@google-cloud/storage');
 
 // Your Google Cloud Platform project ID
 const projectId = 'smartnotepad-156308';
-const text = 'President Obama is speaking at the White House.';
+const text = 'davis is writing code.';
 
 parse(text);
 
@@ -24,7 +24,17 @@ function dependentTokens(node, tokenArray){
     return dependentTokens;
 }
 
+function remove(item, array){
+    //console.log(item);
+    var index = array.indexOf(item);
+    array.splice(index, 1);
+    //return array;
+}
+
+
+
 function removeTokens(tokenArray, entity){
+    var answer = {};
     var tempTokens = tokenArray;
     var string = "";
     var toRemove = [];
@@ -32,65 +42,157 @@ function removeTokens(tokenArray, entity){
     for (var tokens = tempTokens.length -1; tokens >= 0; tokens--){
         string = tempTokens[tokens].text.content;
 
-        //console.log(string);
         if(entity.name.includes(string)){
-            //console.log(string);
+
             var temp = dependentTokens(tempTokens[tokens], tokenArray);
-            //console.log(temp);
+            if(tempTokens[tokens].dependencyEdge.label == "ROOT"){
+                continue;
+            }
             for (var key in temp){
                 if (!temp[key].length == 0) {
-                    //console.log(temp[key]);
                     for (var t in temp[key]) {
                         toRemove.push(temp[key][t]);
                     }
-                    //console.log(toRemove);
                 }
             }
+
             toRemove.push(tempTokens[tokens]);
-            //var index = tempTokens.indexOf(tempTokens[tokens]);
-            //tempTokens.splice(index, 1);
+            answer[JSON.stringify(entity)] = toRemove;
         }
     }
     for (var i in toRemove) {
         var index = tempTokens.indexOf(toRemove[i]);
-        tempTokens.splice(index, 1);
+            //console.log(index, toRemove[i].text.content);
+            if (index >=0)
+                tempTokens.splice(index, 1);
     }
     //console.log(tempTokens);
+    // for(var key in answer){
+    //     console.log(key, answer[key]);
+    // }
     return tempTokens;
+
 }
 
-function whInversion(entity, removed, original){
+
+function aux(retString, removed, flag){
+    for(var item = removed.length-1; item >= 0; item--){
+        if(removed[item].dependencyEdge.label == "AUX"){
+            retString += (removed[item].text.content + " ");
+            //console.log(removed);
+            remove(removed[item], removed);
+            flag = 1;
+        }
+    }
+    if (flag == 0) {
+        retString += "did ";
+    }
+    if(flag == 2){
+        for(var item = removed.length-1; item >= 0; item--){
+            if(removed[item].dependencyEdge.label == "ROOT"){
+                retString += (removed[item].text.content + " ");
+                remove(removed[item], removed);
+                flag = 1;
+            }
+        }
+    }
+    var newLemma;
+    for(var item in removed){
+        if(removed[item].dependencyEdge.label == "ROOT" && flag == 0){
+            newLemma = removed[item].lemma;
+            // removed.splice(item, 1);
+            retString += (newLemma + " ");
+        }
+        else
+        {
+            retString += (removed[item].text.content + " ");
+        }
+    }
+    retString = retString.slice(0, -4);
+    retString += "?";
+    return retString;
+}
+
+
+function inversion(entity, removed, original){
+    var answer = {};
+    //console.log(original)
     var retString = "";
+    var flag = 0;
+    var index;
+
+    for(var node in original){
+        var label = original[node].dependencyEdge.label;
+        var text = original[node].text.content;
+        if((label == "ROOT") && (text == "is" || text == "do" || text == "have" ||
+            text == "has" || text == "had" || text == "does" || text == "did"))
+            {
+                flag = 2;
+                //console.log(text, flag);
+                //index = original.indexOf(original[node]);
+            }
+    }
+
     if(entity.type == "PERSON"){
         retString += "Who ";
+        retString = aux(retString, removed, flag);
+
     }
     else if (entity.type == "LOCATION"){
-        retString += "Where ";
+        var flag = 0;
+        var string = "";
+        //console.log(removed);
+
+        for (var tokens = original.length -1; tokens >= 0; tokens--){
+            string = original[tokens].text.content;
+            if(entity.name.includes(string)){
+                if (original[tokens].dependencyEdge.label == "NSUBJ") {
+                    retString += "Who ";
+                    flag = 1;
+
+                }
+            }
+        }
+        if (flag == 1) {
+            for(var item in removed){
+                retString += (removed[item].text.content + " ");
+            }
+        }
+        if (flag == 0) {
+            retString += "Where ";
+            retString = aux(retString, removed, flag);
+        }
+        // retString += "Where ";
+        // retString = aux(retString, removed);
     }
     else if(entity.type == "EVENT"){
         //what question
         retString += "What ";
+        retString = aux(retString, removed, flag);
     }
     else if(entity.type == "ORGANIZATION"){
         //what question
-        retString += "What ";
+        retString += "Which organization ";
+        retString = aux(retString, removed, flag);
     }
     else if(entity.type == "OTHER"){
         //what question
         retString += "What ";
+        retString = aux(retString, removed, flag);
     }
-    else if(entity.type == "PRODUCTS"){
+    else if(entity.type == "CONSUMER_GOOD"){
         //what question
-        retString += "What ";
+        retString += "What consumer good ";
+        retString = aux(retString, removed, flag);
     }
     else if(entity.type == "MEDIA"){
         //what question
         retString += "What ";
-    }
-    for (var token in removed) {
-        retString += (removed[token].text.content + " ");
+        retString = aux(retString, removed, flag);
     }
     console.log(retString);
+    answer[retString] = entity;
+    //console.log(answer);
 }
 
 function parse(text){
@@ -104,11 +206,12 @@ function parse(text){
         var temp = results[1];
         var ArrayOfEntities = temp.entities;
         var tokens = results[0].tokens;
+        //console.log(results[0]);
         for(var entity in ArrayOfEntities){
              var tempEntity = ArrayOfEntities[entity];
              var tempToken = tokens.slice(0);
              var removed = removeTokens(tempToken, tempEntity);
-             whInversion(tempEntity, removed, tokens);
+             inversion(tempEntity, removed, tokens);
         }
 
     });
@@ -181,10 +284,6 @@ function analyzeSyntaxInFile (bucketName, fileName) {
   return document.detectSyntax()
     .then((results) => {
       const syntax = results[0];
-      //console.log(results);
-      //console.log('Tags:');
-      //syntax.forEach((part) => console.log(part.tag));
-
       return syntax;
     });
 }
